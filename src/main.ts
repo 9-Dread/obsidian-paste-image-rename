@@ -130,21 +130,19 @@ export default class PasteImageRenamePlugin extends Plugin {
 	}
 
 	async startRenameProcess(file: TFile, autoRename = false) {
-		// get active file first
-		const activeFile = this.getActiveFile()
-		if (!activeFile) {
-			new Notice('Error: No active file found.')
-			return
-		}
-
-		const { stem, newName, isMeaningful }= this.generateNewName(file, activeFile)
-		debugLog('generated newName:', newName, isMeaningful)
-
-		if (!isMeaningful || !autoRename) {
-			this.openRenameModal(file, isMeaningful ? stem : '', activeFile.path)
-			return
-		}
-		this.renameFile(file, newName, activeFile.path, true)
+	const activeFile = this.getActiveFile();
+	if (!activeFile) {
+		new Notice('Error: No active file found.');
+		return;
+	}
+	const isCanvas = this.isActiveViewCanvas();
+	const { stem, newName, isMeaningful } = this.generateNewName(file, activeFile);
+	debugLog('generated newName:', newName, isMeaningful, 'isCanvas:', isCanvas);
+	if (!isMeaningful || !autoRename) {
+		this.openRenameModal(file, isMeaningful ? stem : '', activeFile.path, isCanvas);
+		return;
+	}
+	this.renameFile(file, newName, activeFile.path, !isCanvas);
 	}
 
 	async renameFile(file: TFile, inputNewName: string, sourcePath: string, replaceCurrentLine?: boolean) {
@@ -201,12 +199,12 @@ export default class PasteImageRenamePlugin extends Plugin {
 		}
 	}
 
-	openRenameModal(file: TFile, newName: string, sourcePath: string) {
+	openRenameModal(file: TFile, newName: string, sourcePath: string, isCanvas = false) {
 		const modal = new ImageRenameModal(
 			this.app, file as TFile, newName,
 			(confirmedName: string) => {
 				debugLog('confirmedName:', confirmedName)
-				this.renameFile(file, confirmedName, sourcePath, true)
+				this.renameFile(file, confirmedName, sourcePath, !isCanvas)
 			},
 			() => {
 				this.modals.splice(this.modals.indexOf(modal), 1)
@@ -353,10 +351,33 @@ export default class PasteImageRenamePlugin extends Plugin {
 	}
 
 	getActiveFile() {
-		const view = this.app.workspace.getActiveViewOfType(MarkdownView)
-		const file = view?.file
-		debugLog('active file', file?.path)
-		return file
+		const view = this.app.workspace.getActiveViewOfType(MarkdownView);
+		if (view?.file) {
+			debugLog('active file (markdown)', view.file.path);
+			return view.file;
+		}
+		const canvasFile = this.getActiveCanvasFile();
+		if (canvasFile) {
+			debugLog('active file (canvas)', canvasFile.path);
+			return canvasFile;
+		}
+		debugLog('active file: none found');
+		return null;
+		}
+
+		getActiveCanvasFile() {
+		const leaf = this.app.workspace.activeLeaf;
+		const view = leaf?.view as any;
+		if (view?.getViewType?.() === 'canvas') {
+			return view.file || null;
+		}
+		return null;
+		}
+
+		isActiveViewCanvas() {
+		const leaf = this.app.workspace.activeLeaf;
+		const view = leaf?.view as any;
+		return view?.getViewType?.() === 'canvas';
 	}
 	getActiveEditor() {
 		const view = this.app.workspace.getActiveViewOfType(MarkdownView)
